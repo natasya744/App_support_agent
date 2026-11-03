@@ -40,11 +40,13 @@ class Gmail:
         return ids
 
     def list_new_message_ids(self, max_results: int = 10) -> list[str]:
+        # Exclude messages sent by ourselves so the bot never replies to its own sent messages
+        query = f"in:inbox -from:me -from:{self.address} -label:{PROCESSED_LABEL}"
         response = (
             self.users.messages()
             .list(
                 userId="me",
-                q=f"in:inbox -label:{PROCESSED_LABEL}",
+                q=query,
                 maxResults=max_results,
             )
             .execute()
@@ -76,21 +78,32 @@ class Gmail:
         headers = get_headers(message)
         subject = headers.get("subject", "")
         reply = EmailMessage()
-        reply["To"] = headers.get("reply-to") or headers["from"]
+        to_address = headers.get("reply-to") or headers.get("from")
+        if not to_address:
+            raise ValueError(
+                "Cannot reply: missing recipient address in message headers."
+            )
+        reply["To"] = to_address
         reply["Subject"] = (
             subject if subject.lower().startswith("re:") else f"Re: {subject}"
         )
-        reply["In-Reply-To"] = headers["message-id"]
-        reply["References"] = (
-            f"{headers.get('references', '')} {headers['message-id']}".strip()
-        )
+        if msg_id := headers.get("message-id"):
+            reply["In-Reply-To"] = msg_id
+            references = headers.get("references", "")
+            reply["References"] = (
+                f"{references} {msg_id}".strip() if references else msg_id
+            )
         reply.set_content(body)
         raw = base64.urlsafe_b64encode(reply.as_bytes()).decode()
-        return (
+        sent = (
             self.users.messages()
             .send(userId="me", body={"raw": raw, "threadId": message["threadId"]})
             .execute()
         )
+        # Ensure our own sent reply is immediately labeled so it's never re-queried
+        if PROCESSED_LABEL in self.label_ids:
+            self.add_label(sent["id"], PROCESSED_LABEL)
+        return sent
 
 
 def get_headers(message: dict) -> dict[str, str]:
