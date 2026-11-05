@@ -10,9 +10,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("poller")
 
+# How many consecutive errors before we re-create the Gmail client
+# (handles token expiry + SSL hiccups without crashing the whole poller).
+_MAX_GMAIL_ERRORS = 3
 
-def poll_once() -> int:
-    gmail = Gmail()
+
+def poll_once(gmail: Gmail) -> int:
     message_ids = gmail.list_new_message_ids()
     for message_id in message_ids:
         try:
@@ -25,13 +28,34 @@ def poll_once() -> int:
 
 def main() -> None:
     logger.info("Polling every %s seconds", settings.poll_interval_seconds)
+    gmail: Gmail | None = None
+    consecutive_errors = 0
+
     while True:
         try:
-            count = poll_once()
+            # Build the Gmail client once; rebuild only after repeated failures
+            # (e.g. token expiry, transient SSL EOF) to avoid reconnecting every poll.
+            if gmail is None:
+                logger.info("Connecting to Gmail...")
+                gmail = Gmail()
+                logger.info("Connected as %s", gmail.address)
+                consecutive_errors = 0
+
+            count = poll_once(gmail)
+            consecutive_errors = 0
             if count:
                 logger.info("Handled %s new messages", count)
+
         except Exception:
-            logger.exception("Poll failed")
+            consecutive_errors += 1
+            logger.exception(
+                "Poll failed (error %d/%d)", consecutive_errors, _MAX_GMAIL_ERRORS
+            )
+            if consecutive_errors >= _MAX_GMAIL_ERRORS:
+                logger.warning("Too many errors — reconnecting Gmail client next cycle")
+                gmail = None
+                consecutive_errors = 0
+
         time.sleep(settings.poll_interval_seconds)
 
 
