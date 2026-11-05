@@ -26,3 +26,4 @@ create policy "service: full access to knowledge_base"
   on knowledge_base for all
   using (true)
   with check (true);
+
