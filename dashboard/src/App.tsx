@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { isLoggedIn, logout } from "@/lib/api"
 import { EventsPage } from "@/pages/events"
 import { KnowledgeBasePage } from "@/pages/knowledge-base"
@@ -20,12 +21,18 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-7xl p-6">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Olahtek Support</h1>
-        <Button variant="outline" onClick={logOut}>
-          Log out
-        </Button>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Olahtek Support</h1>
+          <p className="text-xs text-muted-foreground">Customer support &amp; ticket automation</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="outline" onClick={logOut}>
+            Log out
+          </Button>
+        </div>
       </header>
       <Tabs defaultValue="events">
         <TabsList>
