@@ -7,6 +7,7 @@ credentials.json
 *.key
 
 # Python
+playground/
 __pycache__/
 *.py[cod]
 *$py.class
